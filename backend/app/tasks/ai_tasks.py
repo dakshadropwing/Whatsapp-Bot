@@ -43,7 +43,7 @@ def process_ai_message(self, conversation_id: str, message_id: str, message_body
     queue="ai",
     name="app.tasks.ai_tasks.generate_embedding",
 )
-def generate_embedding(document_id: str, text: str, provider: str = "openai"):
+def generate_embedding(document_id: str, text: str, provider: str = "ollama"):
     """Generate and store a vector embedding for a document chunk."""
     import asyncio
     try:

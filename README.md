@@ -42,11 +42,10 @@
                                    └──────────────┘
                                           │
                                           ▼
-                           ┌─────────────────────────────┐
-                           │       AI Provider Layer      │
-                           │  OpenAI · Claude · Gemini   │
-                           │  Ollama · Future Providers  │
-                           └─────────────────────────────┘
+                            ┌─────────────────────────────┐
+                            │       AI Provider Layer      │
+                            │     Gemini · Ollama          │
+                            └─────────────────────────────┘
 ```
 
 ---
@@ -115,12 +114,10 @@ Whatsapp-Bot/
 │   │   │   └── ...
 │   │   ├── ai/
 │   │   │   ├── providers/      # LLM provider abstraction
-│   │   │   │   ├── base_provider.py
-│   │   │   │   ├── openai_provider.py
-│   │   │   │   ├── claude_provider.py
-│   │   │   │   ├── gemini_provider.py
-│   │   │   │   ├── ollama_provider.py
-│   │   │   │   └── provider_factory.py
+│   │   │   ├── base_provider.py
+│   │   │   ├── gemini_provider.py
+│   │   │   ├── ollama_provider.py
+│   │   │   └── provider_factory.py
 │   │   │   ├── orchestrator/   # Supervisor + routing
 │   │   │   ├── rag/            # Retrieval-Augmented Generation
 │   │   │   ├── tools/          # Function-calling tools
@@ -196,7 +193,7 @@ Whatsapp-Bot/
 ## 🔑 Key Features
 
 - **Multi-tenant** — full organization isolation
-- **Multi-LLM** — OpenAI, Claude, Gemini, Ollama via unified interface
+- **Multi-LLM** — Gemini, Ollama via unified interface
 - **RAG-ready** — pgvector + embedding pipeline built-in
 - **Tool-calling** — agents can call external APIs
 - **Human handoff** — seamless escalation to human agents
@@ -225,7 +222,7 @@ Whatsapp-Bot/
 | Backend | Python 3.12, Flask 3, SQLAlchemy 2 |
 | Database | PostgreSQL 16 + pgvector |
 | Cache/Queue | Redis 7 + Celery 5 |
-| AI | OpenAI GPT-4o, Claude 3.5, Gemini 1.5, Ollama |
+| AI | Google Gemini 1.5, Ollama (local LLMs) |
 | Frontend | React 18, TypeScript, TailwindCSS, Vite |
 | WhatsApp | Meta Business Cloud API v19 |
 | Encryption | Python cryptography (OpenSSL AES-256-GCM) |

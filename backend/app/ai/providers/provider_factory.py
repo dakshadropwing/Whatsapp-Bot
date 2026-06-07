@@ -11,8 +11,6 @@ from app.core.config.settings import get_settings
 
 
 class ProviderType(str, Enum):
-    OPENAI = "openai"
-    CLAUDE = "claude"
     GEMINI = "gemini"
     OLLAMA = "ollama"
 
@@ -44,19 +42,7 @@ class ProviderFactory:
 
     @classmethod
     def _create(cls, ptype: str, settings) -> BaseAIProvider:
-        if ptype == ProviderType.OPENAI:
-            from app.ai.providers.openai_provider import OpenAIProvider
-            return OpenAIProvider(
-                api_key=settings.OPENAI_API_KEY,
-                model=settings.OPENAI_MODEL,
-            )
-        elif ptype == ProviderType.CLAUDE:
-            from app.ai.providers.claude_provider import ClaudeProvider
-            return ClaudeProvider(
-                api_key=settings.ANTHROPIC_API_KEY,
-                model=settings.ANTHROPIC_MODEL,
-            )
-        elif ptype == ProviderType.GEMINI:
+        if ptype == ProviderType.GEMINI:
             from app.ai.providers.gemini_provider import GeminiProvider
             return GeminiProvider(
                 api_key=settings.GOOGLE_AI_API_KEY,
@@ -80,10 +66,6 @@ class ProviderFactory:
     def list_available(cls) -> list[str]:
         settings = get_settings()
         available = []
-        if settings.OPENAI_API_KEY:
-            available.append(ProviderType.OPENAI)
-        if settings.ANTHROPIC_API_KEY:
-            available.append(ProviderType.CLAUDE)
         if settings.GOOGLE_AI_API_KEY:
             available.append(ProviderType.GEMINI)
         available.append(ProviderType.OLLAMA)  # Always available if running locally

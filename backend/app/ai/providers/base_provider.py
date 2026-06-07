@@ -52,7 +52,7 @@ class CompletionResponse:
 class BaseAIProvider(ABC):
     """
     Abstract AI provider.
-    All concrete implementations (OpenAI, Claude, Gemini, Ollama)
+    All concrete implementations (Gemini, Ollama)
     must inherit from this class.
     """
 

@@ -86,15 +86,11 @@ class Settings(BaseSettings):
     WHATSAPP_API_BASE_URL: str = Field(default="https://graph.facebook.com")
 
     # ── AI Providers ──────────────────────────────────────────
-    OPENAI_API_KEY: Optional[str] = None
-    OPENAI_MODEL: str = Field(default="gpt-4o")
-    ANTHROPIC_API_KEY: Optional[str] = None
-    ANTHROPIC_MODEL: str = Field(default="claude-3-5-sonnet-20241022")
     GOOGLE_AI_API_KEY: Optional[str] = None
     GOOGLE_AI_MODEL: str = Field(default="gemini-1.5-pro")
     OLLAMA_BASE_URL: str = Field(default="http://localhost:11434")
-    OLLAMA_MODEL: str = Field(default="llama3")
-    DEFAULT_AI_PROVIDER: str = Field(default="openai")
+    OLLAMA_MODEL: str = Field(default="llama3.2:1b")
+    DEFAULT_AI_PROVIDER: str = Field(default="ollama")
 
     # ── JWT ───────────────────────────────────────────────────
     JWT_SECRET_KEY: str = Field(...)
