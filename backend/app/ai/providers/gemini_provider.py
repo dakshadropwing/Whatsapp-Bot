@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import json
 import logging
-from typing import Any, AsyncIterator, Optional
+from typing import Any, AsyncGenerator, AsyncIterator, Optional
 
 from google import genai
 from google.genai import types
@@ -56,13 +56,15 @@ class GeminiProvider(BaseAIProvider):
                 if response_dict is None:
                     response_dict = {"result": msg.content or ""}
 
+                # msg.name is Optional[str]; fall back to a safe default if None
+                tool_name = msg.name or "unknown_tool"
                 contents.append(
                     types.Content(
                         role="tool",
                         parts=[
                             types.Part(
                                 function_response=types.FunctionResponse(
-                                    name=msg.name,
+                                    name=tool_name,
                                     response=response_dict,
                                 )
                             )
@@ -184,7 +186,8 @@ class GeminiProvider(BaseAIProvider):
             raw_response=response,
         )
 
-    async def stream(self, request: CompletionRequest) -> AsyncIterator[str]:
+    async def stream(self, request: CompletionRequest) -> AsyncGenerator[str, None]:
+        """Async-generator that yields token strings from the Gemini streaming API."""
         contents, config = self._build_gemini_contents_and_config(request)
 
         response_stream = await self._client.aio.models.generate_content_stream(
@@ -198,19 +201,29 @@ class GeminiProvider(BaseAIProvider):
                 yield chunk.text
 
     async def embed(self, text: str) -> list[float]:
+        """Generate a text embedding using the current Gemini embedding model."""
         response = await self._client.aio.models.embed_content(
-            model="gemini-embedding-2",
+            # "text-embedding-004" is the stable GA model; fall back to values list.
+            model="text-embedding-004",
             contents=text,
         )
         if response.embeddings and len(response.embeddings) > 0:
-            return response.embeddings[0].values
+            return list(response.embeddings[0].values)
         return []
 
     async def health_check(self) -> bool:
+        """Return True if the Gemini API is reachable and returns at least one model."""
         try:
-            models = await self._client.aio.models.list()
-            for _ in models:
-                return True
-            return False
+            # Collect results into a list so we can check length safely,
+            # regardless of whether the SDK returns a Pager or a plain list.
+            models = [m async for m in await self._client.aio.models.list()]
+            return len(models) > 0
+        except TypeError:
+            # Older SDK versions return a list directly, not an async iterable.
+            try:
+                models = await self._client.aio.models.list()
+                return bool(models)
+            except Exception:
+                return False
         except Exception:
             return False

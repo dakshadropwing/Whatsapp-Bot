@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from typing import Any, AsyncIterator, Optional
+from typing import Any, AsyncGenerator, AsyncIterator, Optional
 
 
 @dataclass
@@ -76,8 +76,8 @@ class BaseAIProvider(ABC):
     @abstractmethod
     async def stream(
         self, request: CompletionRequest
-    ) -> AsyncIterator[str]:
-        """Stream tokens from the model."""
+    ) -> AsyncGenerator[str, None]:
+        """Async-generator that streams tokens from the model."""
         ...
 
     @abstractmethod
