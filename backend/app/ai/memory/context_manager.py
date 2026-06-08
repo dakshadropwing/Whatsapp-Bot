@@ -66,13 +66,14 @@ class ContextManager:
         new_user_message: str,
         conversation_obj: Optional[Any] = None,     # SQLAlchemy Conversation instance
         history_limit: Optional[int] = None,         # override max messages
+        rag_context: Optional[str] = None,           # pre-formatted RAG context block
     ) -> list[Message]:
         """
         Build the complete message list to pass to CompletionRequest.
 
         Structure returned:
             [
-              Message(role="system",    content="<system_prompt + long-term facts>"),
+              Message(role="system",    content="<system_prompt + long-term facts + RAG>"),
               Message(role="user",      content="<oldest remembered message>"),
               Message(role="assistant", content="..."),
               ...                           ← recent history from Redis
@@ -85,21 +86,35 @@ class ContextManager:
             new_user_message:  the latest message from the user
             conversation_obj:  optional Conversation ORM object for long-term memory
             history_limit:     optional override for max history messages
+            rag_context:       optional pre-formatted RAG context string from
+                               Retriever.format_context(). When provided it is
+                               appended to the system prompt so the LLM can
+                               ground its answer in your Knowledge Base.
 
         Returns:
             list[Message] ready to pass to CompletionRequest.messages
         """
         messages: list[Message] = []
 
-        # ── 1. Build system prompt (base + long-term memory summary) ──────────
+        # ── 1. Build system prompt (base + long-term memory + RAG context) ────
         enriched_system = system_prompt
+
+        # 1a. Append long-term contact memory (if available)
         if conversation_obj is not None:
             lt_summary = self._long.get_summary(conversation_obj)
             if lt_summary:
                 enriched_system = (
-                    f"{system_prompt}\n\n"
+                    f"{enriched_system}\n\n"
                     f"--- Contact Memory ---\n{lt_summary}"
                 )
+
+        # 1b. Append RAG retrieved knowledge (if provided)
+        if rag_context:
+            enriched_system = (
+                f"{enriched_system}\n\n"
+                f"{rag_context}"
+            )
+
         messages.append(Message(role="system", content=enriched_system))
 
         # ── 2. Inject short-term history ──────────────────────────────────────
