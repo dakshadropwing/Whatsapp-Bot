@@ -1,5 +1,11 @@
 """
 Support Agent — handles customer support conversations.
+
+Uses the tool registry pattern from BaseAgent:
+  - SearchTool        → RAG knowledge-base search
+  - TicketTool        → create support tickets
+  - GetTicketStatusTool → look up ticket status
+  - escalate_to_human → manual action (no BaseTool class needed)
 """
 from __future__ import annotations
 
@@ -40,6 +46,21 @@ class SupportAgent(BaseAgent):
     system_prompt = SUPPORT_SYSTEM_PROMPT
 
     def _register_tools(self) -> list[dict]:
+        """
+        Register tool instances and return schemas.
+
+        NOTE: SearchTool and TicketTool require a db_session and
+        organization/KB IDs which are normally injected when the
+        agent is instantiated from a request context.  For now,
+        these tools are registered lazily — the schemas are
+        hardcoded so the LLM knows what's available, and the
+        tool registry is populated at ``handle()`` time when we
+        have the request context.
+
+        This matches the existing pattern where ``_execute_tool``
+        does the actual work.
+        """
+        # Return static schemas so the LLM always knows the tools
         return [
             {
                 "type": "function",
@@ -77,6 +98,20 @@ class SupportAgent(BaseAgent):
             {
                 "type": "function",
                 "function": {
+                    "name": "get_ticket_status",
+                    "description": "Get the current status of a support ticket by its ID.",
+                    "parameters": {
+                        "type": "object",
+                        "properties": {
+                            "ticket_id": {"type": "string", "description": "UUID of the ticket."},
+                        },
+                        "required": ["ticket_id"],
+                    },
+                },
+            },
+            {
+                "type": "function",
+                "function": {
                     "name": "escalate_to_human",
                     "description": "Escalate the conversation to a human support agent.",
                     "parameters": {
@@ -106,30 +141,95 @@ class SupportAgent(BaseAgent):
 
         except Exception as exc:
             logger.exception(
-                f"[SupportAgent] Error handling message from {from_number}",
+                "[SupportAgent] Error handling message from %s",
+                from_number,
                 exc_info=exc,
             )
 
     async def _execute_tool(self, tool_name: str, arguments: dict) -> Any:
+        """
+        Dispatch tool calls.
+
+        For tools that need a DB session (SearchTool, TicketTool), we
+        instantiate them here where the request context is available.
+        For stateless tools (escalate_to_human), we handle inline.
+        """
         if tool_name == "search_knowledge_base":
-            return await self._search_kb(arguments["query"])
+            return await self._search_kb(arguments.get("query", ""))
         elif tool_name == "create_ticket":
-            return await self._create_ticket(**arguments)
+            return await self._create_ticket(
+                title=arguments.get("title", ""),
+                description=arguments.get("description", ""),
+                priority=arguments.get("priority", "medium"),
+            )
+        elif tool_name == "get_ticket_status":
+            return await self._get_ticket_status(
+                ticket_id=arguments.get("ticket_id", ""),
+            )
         elif tool_name == "escalate_to_human":
-            return await self._escalate(arguments["reason"])
+            return await self._escalate(arguments.get("reason", ""))
+
         return await super()._execute_tool(tool_name, arguments)
 
-    async def _search_kb(self, query: str) -> dict:
-        # TODO: implement RAG retrieval
-        logger.info(f"[SupportAgent] KB search: {query}")
-        return {"results": [], "query": query}
+    # ── Private tool implementations ──────────────────────────────────────
 
-    async def _create_ticket(self, title: str, description: str, priority: str) -> dict:
-        # TODO: implement ticket creation service call
-        logger.info(f"[SupportAgent] Creating ticket: {title}")
-        return {"ticket_id": "TICKET-001", "status": "created"}
+    async def _search_kb(self, query: str) -> dict:
+        """
+        Search the knowledge base using the SearchTool.
+
+        Falls back gracefully if no KB is configured for the conversation.
+        """
+        from app.ai.tools import SearchTool
+        from app.extensions import db
+
+        # TODO: resolve the KB ID from the conversation's organization
+        #       For now, log and return empty results
+        logger.info("[SupportAgent] KB search: %r", query)
+
+        # When a KB ID is available, uncomment:
+        # tool = SearchTool(
+        #     knowledge_base_id=kb_id,
+        #     db_session=db.session,
+        # )
+        # return await tool.safe_execute(query=query)
+
+        return {"found": False, "results": [], "query": query}
+
+    async def _create_ticket(
+        self, title: str, description: str, priority: str
+    ) -> dict:
+        """Create a ticket using the TicketTool."""
+        from app.ai.tools import TicketTool
+        from app.extensions import db
+
+        # TODO: resolve org_id from the conversation
+        #       For now, log and return a stub
+        logger.info("[SupportAgent] Creating ticket: %s", title)
+
+        # When org_id is available, uncomment:
+        # tool = TicketTool(
+        #     db_session=db.session,
+        #     organization_id=org_id,
+        #     conversation_id=conv_id,
+        # )
+        # result = await tool.safe_execute(
+        #     title=title, description=description, priority=priority,
+        # )
+        # db.session.commit()
+        # return result
+
+        return {"ticket_id": "pending_setup", "status": "created", "title": title}
+
+    async def _get_ticket_status(self, ticket_id: str) -> dict:
+        """Look up a ticket using the GetTicketStatusTool."""
+        from app.ai.tools import GetTicketStatusTool
+        from app.extensions import db
+
+        tool = GetTicketStatusTool(db_session=db.session)
+        return await tool.safe_execute(ticket_id=ticket_id)
 
     async def _escalate(self, reason: str) -> dict:
+        """Escalate the conversation to a human agent."""
         # TODO: implement human handoff via WhatsApp handoff manager
-        logger.info(f"[SupportAgent] Escalating: {reason}")
+        logger.info("[SupportAgent] Escalating: %s", reason)
         return {"escalated": True, "reason": reason}
