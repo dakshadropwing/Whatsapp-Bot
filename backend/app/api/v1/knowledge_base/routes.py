@@ -5,6 +5,7 @@ from flask import Blueprint, jsonify
 from flask_jwt_extended import jwt_required
 
 knowledge_base_bp = Blueprint("knowledge_base", __name__)
+kb_bp = knowledge_base_bp
 
 @knowledge_base_bp.get("/")
 @jwt_required()

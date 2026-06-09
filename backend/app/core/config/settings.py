@@ -6,7 +6,7 @@ from __future__ import annotations
 
 import os
 from functools import lru_cache
-from typing import List, Optional
+from typing import Any, List, Optional
 
 from pydantic import AnyHttpUrl, Field, validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -111,7 +111,7 @@ class Settings(BaseSettings):
     LOCAL_UPLOAD_PATH: str = Field(default="/app/uploads")
 
     # ── CORS ──────────────────────────────────────────────────
-    CORS_ORIGINS: List[str] = Field(default=["http://localhost:3000"])
+    CORS_ORIGINS: Any = Field(default=["http://localhost:3000"])
 
     @validator("CORS_ORIGINS", pre=True)
     @classmethod

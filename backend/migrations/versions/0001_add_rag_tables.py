@@ -37,7 +37,7 @@ from sqlalchemy.dialects import postgresql
 
 # Alembic identifiers
 revision = "0001_add_rag_tables"
-down_revision = None    # Set this to the last existing migration revision ID
+down_revision = "0000_create_base_tables"
 branch_labels = None
 depends_on = None
 
