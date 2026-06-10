@@ -259,6 +259,11 @@ class SupportAgent(BaseAgent):
 
     async def _escalate(self, reason: str) -> dict:
         """Escalate the conversation to a human agent."""
-        # TODO: implement human handoff via WhatsApp handoff manager
         logger.info("[SupportAgent] Escalating: %s", reason)
-        return {"escalated": True, "reason": reason}
+        from app.ai.orchestrator.handoff import SessionHandoffManager
+        handoff = SessionHandoffManager()
+        success = await handoff.handoff_to_human(
+            phone_number=self._current_conversation_id,
+            reason=reason,
+        )
+        return {"escalated": success, "reason": reason}

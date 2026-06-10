@@ -35,6 +35,29 @@ class AgentRouter:
         from_number = normalized_message["from"]
         body = normalized_message["body"]
 
+        # Step 0: Check database conversation status for active human handling
+        from app.extensions import db
+        from sqlalchemy import select
+        from app.models.conversation import Conversation, ConversationStatus
+
+        try:
+            conv = db.session.execute(
+                select(Conversation)
+                .where(Conversation.contact_phone == from_number)
+                .order_by(Conversation.created_at.desc())
+                .limit(1)
+            ).scalar_one_or_none()
+
+            if conv and conv.status in (ConversationStatus.HUMAN_HANDLING, ConversationStatus.ESCALATED):
+                logger.info(
+                    "Router: bypassing agent routing for phone=%s as status is %s",
+                    from_number,
+                    conv.status.value,
+                )
+                return
+        except Exception as exc:
+            logger.warning("Router: database check failed, routing normally", exc_info=exc)
+
         # Step 1: Look up existing session
         agent_type = await self._get_active_agent(from_number)
 
@@ -82,12 +105,12 @@ class AgentRouter:
         Returns one of the keys in AGENT_REGISTRY.
         Fallback to 'support' on error.
         """
-        from app.agents.supervisor_agent import SupervisorAgent
+        from app.ai.orchestrator.supervisor import SupervisorOrchestrator
         try:
-            supervisor = SupervisorAgent()
-            return await supervisor.classify(text)
+            orchestrator = SupervisorOrchestrator()
+            return await orchestrator.determine_intent(text)
         except Exception as exc:
-            logger.exception("Failed to classify using SupervisorAgent, falling back to 'support'", exc_info=exc)
+            logger.exception("Failed to classify using SupervisorOrchestrator, falling back to 'support'", exc_info=exc)
             return "support"
 
     def _load_agent(self, agent_type: str):
