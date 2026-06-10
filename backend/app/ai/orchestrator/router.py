@@ -43,7 +43,10 @@ class AgentRouter:
             agent_type = await self._classify(body)
             logger.info(f"Router: classified '{from_number}' → {agent_type}")
 
-        # Step 3: Invoke agent
+        # Step 3: Extend or save the active session in cache
+        await self._set_active_agent(from_number, agent_type)
+
+        # Step 4: Invoke agent
         agent = self._load_agent(agent_type)
         if agent:
             await agent.handle(normalized_message)
@@ -52,8 +55,26 @@ class AgentRouter:
 
     async def _get_active_agent(self, phone: str) -> str | None:
         """Check Redis for an ongoing agent session for this phone number."""
-        # TODO: implement Redis lookup
-        return None
+        import redis.asyncio as aioredis
+        from app.core.config.settings import get_settings
+        settings = get_settings()
+        try:
+            r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+            return await r.get(f"session:agent:{phone}")
+        except Exception as exc:
+            logger.warning(f"Failed to fetch active agent session for phone {phone} from Redis", exc_info=exc)
+            return None
+
+    async def _set_active_agent(self, phone: str, agent_type: str) -> None:
+        """Save the active agent to Redis (expires after 30 minutes)."""
+        import redis.asyncio as aioredis
+        from app.core.config.settings import get_settings
+        settings = get_settings()
+        try:
+            r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
+            await r.setex(f"session:agent:{phone}", 1800, agent_type)
+        except Exception as exc:
+            logger.warning(f"Failed to persist active agent session for phone {phone} to Redis", exc_info=exc)
 
     async def _classify(self, text: str) -> str:
         """
@@ -61,9 +82,13 @@ class AgentRouter:
         Returns one of the keys in AGENT_REGISTRY.
         Fallback to 'support' on error.
         """
-        # TODO: call supervisor LLM with intent classification prompt
-        # For now return default
-        return "support"
+        from app.agents.supervisor_agent import SupervisorAgent
+        try:
+            supervisor = SupervisorAgent()
+            return await supervisor.classify(text)
+        except Exception as exc:
+            logger.exception("Failed to classify using SupervisorAgent, falling back to 'support'", exc_info=exc)
+            return "support"
 
     def _load_agent(self, agent_type: str):
         """Dynamically import and instantiate the agent class."""

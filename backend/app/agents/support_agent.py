@@ -129,6 +129,7 @@ class SupportAgent(BaseAgent):
         from_number = message["from"]
         body = message["body"]
         conversation_id = from_number  # Use phone as conversation key for simplicity
+        self._current_conversation_id = conversation_id
 
         try:
             response_text = await self._generate_response(
@@ -181,17 +182,34 @@ class SupportAgent(BaseAgent):
         """
         from app.ai.tools import SearchTool
         from app.extensions import db
+        from sqlalchemy import select
+        from app.models.conversation import Conversation
+        from app.models.knowledge_base import KnowledgeBase
 
-        # TODO: resolve the KB ID from the conversation's organization
-        #       For now, log and return empty results
         logger.info("[SupportAgent] KB search: %r", query)
 
-        # When a KB ID is available, uncomment:
-        # tool = SearchTool(
-        #     knowledge_base_id=kb_id,
-        #     db_session=db.session,
-        # )
-        # return await tool.safe_execute(query=query)
+        phone = self._current_conversation_id
+        if phone:
+            conv = db.session.execute(
+                select(Conversation)
+                .where(Conversation.contact_phone == phone)
+                .order_by(Conversation.created_at.desc())
+                .limit(1)
+            ).scalar_one_or_none()
+
+            if conv:
+                kb = db.session.execute(
+                    select(KnowledgeBase)
+                    .where(KnowledgeBase.organization_id == conv.organization_id, KnowledgeBase.is_active == True)
+                    .limit(1)
+                ).scalar_one_or_none()
+
+                if kb:
+                    tool = SearchTool(
+                        knowledge_base_id=kb.id,
+                        db_session=db.session,
+                    )
+                    return await tool.safe_execute(query=query)
 
         return {"found": False, "results": [], "query": query}
 
@@ -201,22 +219,33 @@ class SupportAgent(BaseAgent):
         """Create a ticket using the TicketTool."""
         from app.ai.tools import TicketTool
         from app.extensions import db
+        from sqlalchemy import select
+        from app.models.conversation import Conversation
 
-        # TODO: resolve org_id from the conversation
-        #       For now, log and return a stub
         logger.info("[SupportAgent] Creating ticket: %s", title)
 
-        # When org_id is available, uncomment:
-        # tool = TicketTool(
-        #     db_session=db.session,
-        #     organization_id=org_id,
-        #     conversation_id=conv_id,
-        # )
-        # result = await tool.safe_execute(
-        #     title=title, description=description, priority=priority,
-        # )
-        # db.session.commit()
-        # return result
+        phone = self._current_conversation_id
+        if phone:
+            conv = db.session.execute(
+                select(Conversation)
+                .where(Conversation.contact_phone == phone)
+                .order_by(Conversation.created_at.desc())
+                .limit(1)
+            ).scalar_one_or_none()
+
+            if conv:
+                tool = TicketTool(
+                    db_session=db.session,
+                    organization_id=conv.organization_id,
+                    conversation_id=conv.id,
+                    contact_phone=conv.contact_phone,
+                    contact_name=conv.contact_name,
+                )
+                result = await tool.safe_execute(
+                    title=title, description=description, priority=priority
+                )
+                db.session.commit()
+                return result
 
         return {"ticket_id": "pending_setup", "status": "created", "title": title}
 
