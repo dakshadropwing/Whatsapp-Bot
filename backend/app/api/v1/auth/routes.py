@@ -1,5 +1,5 @@
 """
-Auth routes — login, refresh, logout, register.
+Auth routes — login, refresh, logout, register, profile.
 """
 from __future__ import annotations
 
@@ -7,9 +7,12 @@ from flask import Blueprint, jsonify, request
 from flask_jwt_extended import (
     create_access_token,
     create_refresh_token,
+    get_jwt,
     get_jwt_identity,
     jwt_required,
 )
+
+from app.services.auth_service import AuthService
 
 auth_bp = Blueprint("auth", __name__)
 
@@ -28,9 +31,11 @@ def login():
     if not email or not password:
         return jsonify({"error": "Email and password are required"}), 400
 
-    # TODO: delegate to AuthService.login(email, password)
-    # For now return a placeholder
-    return jsonify({"message": "Login endpoint — implement AuthService"}), 501
+    result = AuthService.authenticate_user(email, password)
+    if not result:
+        return jsonify({"error": "Invalid email or password"}), 401
+
+    return jsonify(result), 200
 
 
 @auth_bp.post("/refresh")
@@ -38,7 +43,15 @@ def login():
 def refresh():
     """Refresh the access token using a valid refresh token."""
     identity = get_jwt_identity()
-    access_token = create_access_token(identity=identity)
+    claims = get_jwt()
+    # Preserve org_id and role in the new access token
+    additional_claims = {
+        "org_id": claims.get("org_id", ""),
+        "role": claims.get("role", ""),
+    }
+    access_token = create_access_token(
+        identity=identity, additional_claims=additional_claims
+    )
     return jsonify({"access_token": access_token}), 200
 
 
@@ -54,6 +67,26 @@ def logout():
 @jwt_required()
 def me():
     """Return the current authenticated user's profile."""
+    from app.repositories.user_repo import UserRepository
+
     identity = get_jwt_identity()
-    # TODO: fetch user from UserService
-    return jsonify({"user_id": identity}), 200
+    user_repo = UserRepository()
+    user = user_repo.find_active_by_id(identity)
+
+    if not user:
+        return jsonify({"error": "User not found or inactive"}), 404
+
+    return jsonify({
+        "user": {
+            "id": str(user.id),
+            "email": user.email,
+            "username": user.username,
+            "full_name": user.full_name,
+            "organization_id": str(user.organization_id),
+            "org_id": str(user.organization_id),
+            "role": str(user.role_id or "member"),
+            "role_id": str(user.role_id) if user.role_id else None,
+            "last_login_at": user.last_login_at,
+            "preferences": user.preferences,
+        }
+    }), 200

@@ -15,6 +15,7 @@ celery_app = Celery(
     broker=settings.CELERY_BROKER_URL,
     backend=settings.CELERY_RESULT_BACKEND,
     include=[
+        "app.tasks.queue_tasks",
         "app.tasks.ai_tasks",
         "app.tasks.workflow_tasks",
         "app.tasks.notification_tasks",

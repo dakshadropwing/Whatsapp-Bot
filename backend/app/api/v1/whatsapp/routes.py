@@ -1,5 +1,5 @@
 """
-WhatsApp webhook routes — handles verification and inbound events.
+WhatsApp routes — webhook handling + management (accounts, send).
 """
 from __future__ import annotations
 
@@ -7,6 +7,7 @@ import asyncio
 import logging
 
 from flask import Blueprint, jsonify, request
+from flask_jwt_extended import jwt_required
 
 from app.integrations.whatsapp.webhook_handler import WebhookHandler
 
@@ -14,6 +15,8 @@ logger = logging.getLogger(__name__)
 whatsapp_bp = Blueprint("whatsapp", __name__)
 _handler = WebhookHandler()
 
+
+# ── Webhook (public, no auth) ────────────────────────────────────
 
 @whatsapp_bp.get("/webhook")
 def verify_webhook():
@@ -48,3 +51,39 @@ def receive_webhook():
         loop.close()
 
     return jsonify({"status": "ok"}), 200
+
+
+# ── Management (auth required) ───────────────────────────────────
+
+@whatsapp_bp.get("/accounts")
+@jwt_required()
+def list_accounts():
+    """List connected WhatsApp Business accounts."""
+    # TODO: WhatsAppAccountService.list(org_id)
+    return jsonify({"accounts": []}), 200
+
+
+@whatsapp_bp.post("/send")
+@jwt_required()
+def send_message():
+    """Send a text message via WhatsApp."""
+    data = request.get_json(silent=True) or {}
+    phone = data.get("phone")
+    message = data.get("message")
+    if not phone or not message:
+        return jsonify({"error": "phone and message are required"}), 400
+    # TODO: WhatsAppSendService.send_text(org_id, phone, message)
+    return jsonify({"sent": True, "message_id": "wamid.stub"}), 200
+
+
+@whatsapp_bp.post("/send-template")
+@jwt_required()
+def send_template():
+    """Send a template message via WhatsApp."""
+    data = request.get_json(silent=True) or {}
+    phone = data.get("phone")
+    template_name = data.get("template_name")
+    if not phone or not template_name:
+        return jsonify({"error": "phone and template_name are required"}), 400
+    # TODO: WhatsAppSendService.send_template(org_id, phone, template_name, language, parameters)
+    return jsonify({"sent": True, "message_id": "wamid.stub"}), 200

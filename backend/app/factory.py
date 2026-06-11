@@ -58,6 +58,10 @@ def create_app(settings: Optional[Settings] = None) -> Flask:
     # ── Error Handlers ───────────────────────────────────────
     register_error_handlers(app)
 
+    # ── Middleware ─────────────────────────────────────────────
+    from app.middleware.tenant_middleware import setup_tenant_middleware
+    setup_tenant_middleware(app)
+
     # ── App Events ───────────────────────────────────────────
     register_startup_events(app)
     register_shutdown_events(app)

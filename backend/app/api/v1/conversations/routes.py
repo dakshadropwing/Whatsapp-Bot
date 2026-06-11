@@ -20,7 +20,7 @@ def list_conversations():
     page = int(request.args.get("page", 1))
     per_page = int(request.args.get("per_page", 20))
     # TODO: ConversationService.list(org_id, status, page, per_page)
-    return jsonify({"conversations": [], "page": page, "per_page": per_page}), 200
+    return jsonify({"data": [], "total": 0, "page": page, "per_page": per_page, "total_pages": 0}), 200
 
 
 @conversations_bp.get("/<conversation_id>")
@@ -28,7 +28,16 @@ def list_conversations():
 def get_conversation(conversation_id: str):
     """GET /api/v1/conversations/{id} — fetch a single conversation with messages."""
     # TODO: ConversationService.get(conversation_id)
-    return jsonify({"id": conversation_id}), 200
+    return jsonify({"conversation": {"id": conversation_id}}), 200
+
+
+@conversations_bp.patch("/<conversation_id>")
+@jwt_required()
+def update_conversation(conversation_id: str):
+    """PATCH /api/v1/conversations/{id} — update assignment or fields."""
+    data = request.get_json(silent=True) or {}
+    # TODO: ConversationService.update(conversation_id, data)
+    return jsonify({"id": conversation_id, "updated": True}), 200
 
 
 @conversations_bp.post("/<conversation_id>/assign")
@@ -63,4 +72,4 @@ def get_messages(conversation_id: str):
     page = int(request.args.get("page", 1))
     per_page = int(request.args.get("per_page", 50))
     # TODO: MessageService.list(conversation_id, page, per_page)
-    return jsonify({"messages": [], "page": page}), 200
+    return jsonify({"data": [], "total": 0, "page": page, "per_page": per_page, "total_pages": 0}), 200
