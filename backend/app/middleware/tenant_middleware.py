@@ -17,6 +17,7 @@ EXEMPT_PATHS: list[str] = [
     "/api/v1/auth/login",
     "/api/v1/auth/refresh",
     "/api/v1/webhooks/whatsapp",
+    "/api/v1/whatsapp/webhook",
 ]
 
 

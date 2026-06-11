@@ -198,7 +198,7 @@ async def test_gemini_provider_embed(provider):
     emb = await provider.embed("test text")
     assert emb == [0.1, 0.2, 0.3]
     provider._client.aio.models.embed_content.assert_called_once_with(
-        model="gemini-embedding-2",
+        model="text-embedding-004",
         contents="test text",
     )
 

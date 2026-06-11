@@ -106,6 +106,10 @@ class WebhookHandler:
 
     async def _handle_statuses(self, value: dict) -> None:
         """Handle delivery/read status updates for outbound messages."""
+        from app.extensions import db
+        from app.models.message import Message, MessageStatus
+        from sqlalchemy import select
+
         for status in value.get("statuses", []):
             wa_message_id = status.get("id")
             new_status = status.get("status")  # sent | delivered | read | failed
@@ -113,4 +117,25 @@ class WebhookHandler:
                 "Message status update",
                 extra={"wa_message_id": wa_message_id, "status": new_status},
             )
-            # TODO: update Message.status in DB
+            if not wa_message_id:
+                continue
+
+            try:
+                status_map = {
+                    "sent": MessageStatus.SENT,
+                    "delivered": MessageStatus.DELIVERED,
+                    "read": MessageStatus.READ,
+                    "failed": MessageStatus.FAILED,
+                }
+                status_enum = status_map.get(new_status)
+                if status_enum:
+                    msg = db.session.execute(
+                        select(Message).where(Message.wa_message_id == wa_message_id)
+                    ).scalar_one_or_none()
+                    if msg:
+                        msg.status = status_enum
+                        db.session.commit()
+                        logger.info("Updated message %s status to %s", msg.id, status_enum)
+            except Exception as exc:
+                logger.exception("Failed to update message status for wa_message_id %s", wa_message_id)
+                db.session.rollback()

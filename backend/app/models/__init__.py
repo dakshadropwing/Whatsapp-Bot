@@ -12,6 +12,20 @@ from app.models.document import Document
 from app.models.embedding import DocumentChunk
 from app.models.ticket import Ticket
 from app.models.endpoint_config import EndpointConfig
+from app.models.client import Client
+from app.models.employee import Employee
+from app.models.audit_log import AuditLog
+from app.models.workflow import Workflow
+from app.models.prompt_template import PromptTemplate
+from app.models.notification import Notification
+from app.models.activity_log import ActivityLog
+from app.models.agent_config import AgentConfig
+from app.models.api_key import ApiKey
+from app.models.encryption_metadata import EncryptionMetadata
+from app.models.permission import Permission, roles_permissions
+from app.models.system_setting import SystemSetting
+from app.models.webhook_log import WebhookLog
+from app.models.workflow_execution import WorkflowExecution
 
 __all__ = [
     "Base",
@@ -28,4 +42,19 @@ __all__ = [
     "DocumentChunk",
     "Ticket",
     "EndpointConfig",
+    "Client",
+    "Employee",
+    "AuditLog",
+    "Workflow",
+    "PromptTemplate",
+    "Notification",
+    "ActivityLog",
+    "AgentConfig",
+    "ApiKey",
+    "EncryptionMetadata",
+    "Permission",
+    "roles_permissions",
+    "SystemSetting",
+    "WebhookLog",
+    "WorkflowExecution",
 ]

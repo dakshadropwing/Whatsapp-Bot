@@ -44,13 +44,8 @@ def create_app(settings: Optional[Settings] = None) -> Flask:
     _register_extensions(app, settings)
 
     # ── CORS ─────────────────────────────────────────────────
-    CORS(
-        app,
-        origins=settings.CORS_ORIGINS,
-        supports_credentials=True,
-        allow_headers=["Content-Type", "Authorization", "X-Tenant-ID", "X-Request-ID"],
-        methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    )
+    from app.middleware.cors_middleware import setup_cors_middleware
+    setup_cors_middleware(app)
 
     # ── Blueprints ───────────────────────────────────────────
     _register_blueprints(app)
@@ -59,7 +54,14 @@ def create_app(settings: Optional[Settings] = None) -> Flask:
     register_error_handlers(app)
 
     # ── Middleware ─────────────────────────────────────────────
+    from app.middleware.logging_middleware import setup_logging_middleware
+    from app.middleware.rate_limiter import setup_rate_limiter
+    from app.middleware.auth_middleware import setup_auth_middleware
     from app.middleware.tenant_middleware import setup_tenant_middleware
+
+    setup_logging_middleware(app)
+    setup_rate_limiter(app)
+    setup_auth_middleware(app)
     setup_tenant_middleware(app)
 
     # ── App Events ───────────────────────────────────────────

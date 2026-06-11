@@ -46,13 +46,41 @@ def process_ai_message(self, conversation_id: str, message_id: str, message_body
 def generate_embedding(document_id: str, text: str, provider: str = "ollama"):
     """Generate and store a vector embedding for a document chunk."""
     import asyncio
+    import uuid
+    from app.extensions import db
+    from app.models.embedding import DocumentChunk
+    from app.models.document import Document
     try:
         from app.ai.providers.provider_factory import ProviderFactory
         provider_instance = ProviderFactory.get_provider(provider)
         embedding = asyncio.run(provider_instance.embed(text))
         logger.info(f"Generated embedding for document {document_id}: {len(embedding)} dims")
-        # TODO: store in pgvector
-        return {"document_id": document_id, "dimensions": len(embedding)}
+        
+        doc_uuid = uuid.UUID(document_id)
+        doc = db.session.get(Document, doc_uuid)
+        if not doc:
+            raise ValueError(f"Document {document_id} not found")
+        
+        chunk_index = db.session.query(db.func.count(DocumentChunk.id)).filter(DocumentChunk.document_id == doc_uuid).scalar() or 0
+        chunk = DocumentChunk(
+            document_id=doc_uuid,
+            chunk_index=chunk_index,
+            content=text,
+            token_count=len(text.split()),
+            embedding=embedding
+        )
+        db.session.add(chunk)
+        
+        doc.chunk_count = chunk_index + 1
+        db.session.commit()
+        
+        return {
+            "document_id": document_id,
+            "chunk_id": str(chunk.id),
+            "chunk_index": chunk_index,
+            "dimensions": len(embedding)
+        }
     except Exception as exc:
         logger.exception(f"Embedding generation failed for {document_id}")
+        db.session.rollback()
         raise
