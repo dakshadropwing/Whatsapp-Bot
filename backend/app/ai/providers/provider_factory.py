@@ -53,6 +53,7 @@ class ProviderFactory:
             return OllamaProvider(
                 base_url=settings.OLLAMA_BASE_URL,
                 model=settings.OLLAMA_MODEL,
+                embed_model=settings.OLLAMA_EMBED_MODEL,
             )
         else:
             raise ValueError(f"Unknown AI provider: {ptype}")

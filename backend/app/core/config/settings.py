@@ -90,6 +90,7 @@ class Settings(BaseSettings):
     GOOGLE_AI_MODEL: str = Field(default="gemini-2.5-flash")
     OLLAMA_BASE_URL: str = Field(default="http://localhost:11434")
     OLLAMA_MODEL: str = Field(default="llama3.2:1b")
+    OLLAMA_EMBED_MODEL: str = Field(default="nomic-embed-text")
     DEFAULT_AI_PROVIDER: str = Field(default="ollama")
 
     # ── JWT ───────────────────────────────────────────────────

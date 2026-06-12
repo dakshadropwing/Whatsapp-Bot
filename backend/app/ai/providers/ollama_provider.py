@@ -50,6 +50,7 @@ class OllamaProvider(BaseAIProvider):
             kwargs.get("base_url", "http://localhost:11434")
         ).rstrip("/")
         self._model: str = str(kwargs.get("model", "llama3"))
+        self._embed_model: str = str(kwargs.get("embed_model", "nomic-embed-text"))
 
         # httpx.AsyncClient is reused across requests for connection pooling.
         self._client: httpx.AsyncClient = httpx.AsyncClient(
