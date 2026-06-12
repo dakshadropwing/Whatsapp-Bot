@@ -111,7 +111,7 @@ def upgrade() -> None:
             "doc_metadata",
             postgresql.JSONB,
             nullable=False,
-            server_default="'{}'",
+            server_default=sa.text("'{}'"),
         ),
         # Soft-delete
         sa.Column("deleted_at", sa.DateTime(timezone=True), nullable=True),

@@ -5,7 +5,7 @@ from __future__ import annotations
 
 import sys
 import os
-from passlib.hash import bcrypt
+from werkzeug.security import generate_password_hash
 
 # Add backend directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -71,7 +71,7 @@ def seed_database() -> None:
                     email=email,
                     username=username,
                     full_name=full_name,
-                    password_hash=bcrypt.hash("password123"),
+                    password_hash=generate_password_hash("password123"),
                     is_active=True,
                     is_superadmin=(role_name == "superadmin"),
                     organization_id=org.id,

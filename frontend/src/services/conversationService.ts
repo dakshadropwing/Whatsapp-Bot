@@ -3,7 +3,7 @@ import type { Conversation, Message, PaginatedResponse } from '@/types'
 
 export const conversationService = {
   list: (params?: Record<string, unknown>) =>
-    api.get<PaginatedResponse<Conversation>>('/conversations', params).then(r => r.data),
+    api.get<PaginatedResponse<Conversation>>('/conversations/', params).then(r => r.data),
 
   get: (id: string) =>
     api.get<{ conversation: Conversation }>(`/conversations/${id}`).then(r => r.data),

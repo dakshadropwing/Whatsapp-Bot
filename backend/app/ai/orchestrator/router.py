@@ -36,11 +36,15 @@ class AgentRouter:
         body = normalized_message["body"]
         phone_number_id = normalized_message.get("phone_number_id")
 
-        # Step 0: Check database conversation status for active human handling
+        # Step 0: Ensure conversation and message are persisted to PostgreSQL
         from app.extensions import db
         from sqlalchemy import select
         from app.models.conversation import Conversation, ConversationStatus
+        from app.models.whatsapp_account import WhatsAppAccount
+        from app.services.conversation_service import ConversationService
+        from app.services.message_service import MessageService
 
+<<<<<<< HEAD
         # Resolve tenant organization ID first by querying WhatsAppAccount with receiver's phone_number_id
         org_id = None
         if phone_number_id:
@@ -64,16 +68,49 @@ class AgentRouter:
                 query.order_by(Conversation.created_at.desc())
                 .limit(1)
             ).scalar_one_or_none()
+=======
+        conv = None
+        try:
+            phone_number_id = normalized_message.get("phone_number_id")
+            wa_account = None
+            if phone_number_id:
+                wa_account = db.session.execute(
+                    select(WhatsAppAccount).where(WhatsAppAccount.phone_number_id == phone_number_id)
+                ).scalar_one_or_none()
+            if not wa_account:
+                wa_account = db.session.execute(
+                    select(WhatsAppAccount).where(WhatsAppAccount.is_active == True).limit(1)
+                ).scalar_one_or_none()
+>>>>>>> 78514c9 (Describe what you implemented)
 
-            if conv and conv.status in (ConversationStatus.HUMAN_HANDLING, ConversationStatus.ESCALATED):
-                logger.info(
-                    "Router: bypassing agent routing for phone=%s as status is %s",
-                    from_number,
-                    conv.status.value,
+            if wa_account:
+                conv, created = ConversationService.get_or_create(
+                    org_id=str(wa_account.organization_id),
+                    phone=from_number,
+                    wa_id=normalized_message.get("wa_id") or from_number,
+                    wa_account_id=str(wa_account.id),
+                    contact_name=normalized_message.get("contact_name") or "WhatsApp User"
                 )
-                return
-        except Exception as exc:
-            logger.warning("Router: database check failed, routing normally", exc_info=exc)
+
+                MessageService.create_message(
+                    org_id=str(wa_account.organization_id),
+                    conversation_id=str(conv.id),
+                    direction="inbound",
+                    body=body,
+                    message_type=normalized_message.get("type", "text"),
+                    wa_message_id=normalized_message.get("message_id") or normalized_message.get("wa_message_id")
+                )
+        except Exception as p_exc:
+            logger.exception("Router: Failed to persist inbound message to database", exc_info=p_exc)
+
+        # Step 0b: Check conversation status for active human handling/escalation
+        if conv and conv.status in (ConversationStatus.HUMAN_HANDLING, ConversationStatus.ESCALATED):
+            logger.info(
+                "Router: bypassing agent routing for phone=%s as status is %s",
+                from_number,
+                conv.status.value,
+            )
+            return
 
         # Step 1: Look up existing session
         agent_type = await self._get_active_agent(from_number, org_id)

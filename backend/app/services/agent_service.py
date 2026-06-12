@@ -91,3 +91,13 @@ class AgentService:
                 )
             ).scalars().all()
         )
+
+    @staticmethod
+    def delete_agent(agent_id: str) -> bool:
+        agent = db.session.get(AIAgent, uuid.UUID(agent_id))
+        if not agent:
+            return False
+        agent.soft_delete()
+        db.session.commit()
+        logger.info("Soft-deleted agent %s (%s)", agent.name, agent.id)
+        return True

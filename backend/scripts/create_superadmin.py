@@ -8,7 +8,7 @@ from __future__ import annotations
 import argparse
 import sys
 import uuid
-from passlib.hash import bcrypt
+from werkzeug.security import generate_password_hash
 
 # Add backend directory to path
 import os
@@ -54,7 +54,7 @@ def create_superadmin(email: str, username: str, password_raw: str) -> None:
             return
 
         # Hash password and create user
-        password_hash = bcrypt.hash(password_raw)
+        password_hash = generate_password_hash(password_raw)
         user = User(
             email=email,
             username=username,

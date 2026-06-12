@@ -130,3 +130,18 @@ def delete_user(user_id: str):
         return jsonify({"error": "Failed to deactivate user"}), 400
 
     return jsonify({"deleted": True}), 200
+
+
+@users_bp.get("/roles")
+@jwt_required()
+def list_roles():
+    from app.models.role import Role
+    from app.extensions import db
+    roles = db.session.execute(db.select(Role)).scalars().all()
+    return jsonify({
+        "roles": [
+            {"id": str(r.id), "name": r.name, "description": r.description}
+            for r in roles
+        ]
+    }), 200
+

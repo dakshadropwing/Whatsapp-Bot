@@ -1,37 +1,118 @@
 import { useState } from 'react'
-import { Badge, Form, InputGroup, Dropdown } from 'react-bootstrap'
+import { Badge, Form, InputGroup, Dropdown, Spinner } from 'react-bootstrap'
 import { useNavigate } from 'react-router-dom'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { conversationService } from '@services/conversationService'
+import { agentService } from '@services/agentService'
+import { whatsappService } from '@services/whatsappService'
+import toast from 'react-hot-toast'
 
 const statusColors: Record<string, string> = {
-  active: 'success', waiting: 'warning', bot_handling: 'info',
-  human_handling: 'primary', escalated: 'danger', resolved: 'secondary', closed: 'dark',
+  active: 'success',
+  waiting: 'warning',
+  bot_handling: 'info',
+  human_handling: 'primary',
+  escalated: 'danger',
+  resolved: 'secondary',
+  closed: 'dark',
 }
 
-// Mock conversations (will come from API)
-const mockConversations = [
-  { id: '1', name: 'John Smith', phone: '+1 555-0101', status: 'active', lastMessage: 'Hi, I need help with my order', time: '2 min', unread: 2 },
-  { id: '2', name: 'Sarah Johnson', phone: '+1 555-0102', status: 'waiting', lastMessage: 'Thanks! That worked perfectly.', time: '5 min', unread: 0 },
-  { id: '3', name: 'Mike Wilson', phone: '+1 555-0103', status: 'bot_handling', lastMessage: 'What are your pricing plans?', time: '8 min', unread: 1 },
-  { id: '4', name: 'Emily Davis', phone: '+1 555-0104', status: 'escalated', lastMessage: 'This is unacceptable, I want a manager', time: '12 min', unread: 3 },
-  { id: '5', name: 'Chris Brown', phone: '+1 555-0105', status: 'resolved', lastMessage: 'All good now, thank you!', time: '15 min', unread: 0 },
-  { id: '6', name: 'Anna Lee', phone: '+1 555-0106', status: 'active', lastMessage: 'Can you schedule a meeting for tomorrow?', time: '18 min', unread: 1 },
-  { id: '7', name: 'David Kim', phone: '+1 555-0107', status: 'bot_handling', lastMessage: 'I want to know about your HR policies', time: '22 min', unread: 0 },
-  { id: '8', name: 'Lisa Wang', phone: '+1 555-0108', status: 'waiting', lastMessage: 'Please send me the invoice', time: '30 min', unread: 0 },
-]
-
 export default function Conversations() {
+  const qc = useQueryClient()
+  const navigate = useNavigate()
   const [search, setSearch] = useState('')
   const [filter, setFilter] = useState<string>('all')
-  const [activeId, setActiveId] = useState('1')
-  const navigate = useNavigate()
+  const [activeId, setActiveId] = useState<string | null>(null)
+  const [messageText, setMessageText] = useState('')
 
-  const filtered = mockConversations.filter((c) => {
-    const matchSearch = c.name.toLowerCase().includes(search.toLowerCase()) || c.phone.includes(search)
-    const matchFilter = filter === 'all' || c.status === filter
-    return matchSearch && matchFilter
+  // 1. Fetch Conversations
+  const { data: convsData, isLoading: isConvsLoading } = useQuery({
+    queryKey: ['conversations', filter, search],
+    queryFn: () =>
+      conversationService.list({
+        status: filter === 'all' ? undefined : filter,
+        search: search || undefined,
+        per_page: 50,
+      }),
   })
 
-  const active = mockConversations.find((c) => c.id === activeId)
+  const conversationsList = convsData?.data || []
+
+  // If no conversation is active but list has items, set first as active
+  if (!activeId && conversationsList.length > 0) {
+    setActiveId(conversationsList[0].id)
+  }
+
+  const active = conversationsList.find((c: any) => c.id === activeId)
+
+  // 2. Fetch Messages for Active Conversation
+  const { data: messagesData, isLoading: isMessagesLoading } = useQuery({
+    queryKey: ['messages', activeId],
+    queryFn: () => conversationService.getMessages(activeId!),
+    enabled: !!activeId,
+  })
+
+  const messagesList = messagesData?.data || []
+
+  // 3. Fetch AI Agents for Assignment Dropdown
+  const { data: agentsData } = useQuery({
+    queryKey: ['agents'],
+    queryFn: () => agentService.list({ per_page: 50 }),
+  })
+
+  const agentsList = agentsData?.data || []
+
+  // 4. Resolve Mutation
+  const resolveMutation = useMutation({
+    mutationFn: (id: string) => conversationService.resolve(id),
+    onSuccess: () => {
+      toast.success('Conversation resolved')
+      qc.invalidateQueries({ queryKey: ['conversations'] })
+    },
+    onError: () => toast.error('Failed to resolve conversation'),
+  })
+
+  // 5. Escalate Mutation
+  const escalateMutation = useMutation({
+    mutationFn: (id: string) => conversationService.escalate(id),
+    onSuccess: () => {
+      toast.success('Conversation escalated')
+      qc.invalidateQueries({ queryKey: ['conversations'] })
+    },
+    onError: () => toast.error('Failed to escalate conversation'),
+  })
+
+  // 6. Assign Agent Mutation
+  const assignMutation = useMutation({
+    mutationFn: ({ id, agentId }: { id: string; agentId: string }) =>
+      conversationService.assign(id, { assigned_agent_id: agentId }),
+    onSuccess: () => {
+      toast.success('AI Agent assigned')
+      qc.invalidateQueries({ queryKey: ['conversations'] })
+    },
+    onError: () => toast.error('Failed to assign agent'),
+  })
+
+  // 7. Send Message Mutation (simulated outbound reply)
+  const sendMessageMutation = useMutation({
+    mutationFn: ({ phone, message }: { phone: string; message: string }) =>
+      whatsappService.sendText({ phone, message }),
+    onSuccess: () => {
+      setMessageText('')
+      toast.success('Message sent')
+      qc.invalidateQueries({ queryKey: ['messages', activeId] })
+      qc.invalidateQueries({ queryKey: ['conversations'] })
+    },
+    onError: () => toast.error('Failed to send message'),
+  })
+
+  const handleSendMessage = () => {
+    if (!messageText.trim() || !active) return
+    sendMessageMutation.mutate({
+      phone: active.contact_phone,
+      message: messageText,
+    })
+  }
 
   return (
     <div className="chat-container" style={{ margin: '-1.5rem', height: 'calc(100vh - var(--header-height))' }}>
@@ -49,49 +130,58 @@ export default function Conversations() {
             <i className="bi bi-search position-absolute" style={{ right: 12, top: '50%', transform: 'translateY(-50%)', color: '#94a3b8', zIndex: 5, fontSize: '.8rem' }} />
           </InputGroup>
           <div className="d-flex gap-1 mt-2 flex-wrap">
-            {['all', 'active', 'waiting', 'escalated', 'resolved'].map((f) => (
+            {['all', 'active', 'waiting', 'bot_handling', 'human_handling', 'escalated', 'resolved'].map((f) => (
               <button
                 key={f}
                 className={`btn btn-sm ${filter === f ? 'btn-dark' : 'btn-light'}`}
                 style={{ fontSize: '.7rem', padding: '.2rem .6rem', borderRadius: '1rem' }}
                 onClick={() => setFilter(f)}
               >
-                {f.charAt(0).toUpperCase() + f.slice(1)}
+                {f.replace('_', ' ').replace(/\b\w/g, c => c.toUpperCase())}
               </button>
             ))}
           </div>
         </div>
 
-        <div className="chat-list">
-          {filtered.map((c) => (
-            <div
-              key={c.id}
-              className={`chat-item ${c.id === activeId ? 'active' : ''}`}
-              onClick={() => setActiveId(c.id)}
-            >
-              <div className="chat-avatar">{c.name.split(' ').map(n => n[0]).join('')}</div>
-              <div className="chat-main">
-                <div className="d-flex justify-content-between align-items-center">
-                  <span className="fw-semibold" style={{ fontSize: '.85rem' }}>{c.name}</span>
-                  <span className="text-muted" style={{ fontSize: '.7rem' }}>{c.time}</span>
+        {isConvsLoading ? (
+          <div className="d-flex justify-content-center py-5">
+            <Spinner animation="border" variant="success" size="sm" />
+          </div>
+        ) : conversationsList.length === 0 ? (
+          <div className="text-center py-5 text-muted fs-sm">No conversations found.</div>
+        ) : (
+          <div className="chat-list">
+            {conversationsList.map((c: any) => (
+              <div
+                key={c.id}
+                className={`chat-item ${c.id === activeId ? 'active' : ''}`}
+                onClick={() => setActiveId(c.id)}
+              >
+                <div className="chat-avatar">
+                  {c.contact_name ? c.contact_name.split(' ').map((n: string) => n[0]).join('') : 'U'}
                 </div>
-                <div className="d-flex justify-content-between align-items-center mt-1">
-                  <span className="text-muted text-truncate" style={{ fontSize: '.78rem', maxWidth: 180 }}>
-                    {c.lastMessage}
-                  </span>
-                  <div className="d-flex align-items-center gap-1">
-                    {c.unread > 0 && (
-                      <Badge bg="success" style={{ fontSize: '.6rem', padding: '.2em .5em' }}>{c.unread}</Badge>
-                    )}
+                <div className="chat-main">
+                  <div className="d-flex justify-content-between align-items-center">
+                    <span className="fw-semibold" style={{ fontSize: '.85rem' }}>
+                      {c.contact_name || c.contact_phone}
+                    </span>
+                    <span className="text-muted" style={{ fontSize: '.7rem' }}>
+                      {c.last_message_at ? new Date(c.last_message_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                    </span>
+                  </div>
+                  <div className="d-flex justify-content-between align-items-center mt-1">
+                    <span className="text-muted text-truncate" style={{ fontSize: '.78rem', maxWidth: 180 }}>
+                      {c.priority === 'high' ? '⚠️ High Priority' : 'Message thread'}
+                    </span>
+                    <Badge bg={statusColors[c.status] || 'secondary'} className="badge-status">
+                      {c.status.replace('_', ' ')}
+                    </Badge>
                   </div>
                 </div>
-                <Badge bg={statusColors[c.status] || 'secondary'} className="badge-status mt-1">
-                  {c.status.replace('_', ' ')}
-                </Badge>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Main chat area */}
@@ -101,10 +191,14 @@ export default function Conversations() {
             {/* Chat header */}
             <div className="d-flex justify-content-between align-items-center p-3" style={{ background: '#fff', borderBottom: '1px solid var(--border-color)' }}>
               <div className="d-flex align-items-center gap-3">
-                <div className="chat-avatar">{active.name.split(' ').map(n => n[0]).join('')}</div>
+                <div className="chat-avatar">
+                  {active.contact_name ? active.contact_name.split(' ').map((n: string) => n[0]).join('') : 'U'}
+                </div>
                 <div>
-                  <div className="fw-semibold" style={{ fontSize: '.95rem' }}>{active.name}</div>
-                  <div className="text-muted" style={{ fontSize: '.75rem' }}>{active.phone} &middot; {active.status.replace('_', ' ')}</div>
+                  <div className="fw-semibold" style={{ fontSize: '.95rem' }}>{active.contact_name || 'WhatsApp User'}</div>
+                  <div className="text-muted" style={{ fontSize: '.75rem' }}>
+                    {active.contact_phone} &middot; {active.status.replace('_', ' ')}
+                  </div>
                 </div>
               </div>
               <div className="d-flex gap-2">
@@ -112,15 +206,23 @@ export default function Conversations() {
                   <i className="bi bi-chat-text me-1" /> View All
                 </button>
                 <Dropdown>
-                  <Dropdown.Toggle variant="outline-secondary" size="sm" id="conv-actions">
+                  <Dropdown.Toggle variant="outline-secondary" size="sm" id="conv-actions" aria-label="Conversation actions">
                     <i className="bi bi-three-dots-vertical" />
                   </Dropdown.Toggle>
                   <Dropdown.Menu>
-                    <Dropdown.Item><i className="bi bi-person-plus me-2" /> Assign Agent</Dropdown.Item>
-                    <Dropdown.Item><i className="bi bi-arrow-up-circle me-2" /> Escalate</Dropdown.Item>
-                    <Dropdown.Item><i className="bi bi-check-circle me-2" /> Resolve</Dropdown.Item>
+                    <Dropdown.Header>Assign AI Specialist</Dropdown.Header>
+                    {agentsList.filter((a: any) => a.is_active).map((agent: any) => (
+                      <Dropdown.Item key={agent.id} onClick={() => assignMutation.mutate({ id: active.id, agentId: agent.id })}>
+                        <i className="bi bi-robot me-2" /> {agent.name}
+                      </Dropdown.Item>
+                    ))}
                     <Dropdown.Divider />
-                    <Dropdown.Item className="text-danger"><i className="bi bi-x-circle me-2" /> Close</Dropdown.Item>
+                    <Dropdown.Item onClick={() => escalateMutation.mutate(active.id)}>
+                      <i className="bi bi-arrow-up-circle me-2 text-warning" /> Escalate to Human
+                    </Dropdown.Item>
+                    <Dropdown.Item onClick={() => resolveMutation.mutate(active.id)}>
+                      <i className="bi bi-check-circle me-2 text-success" /> Resolve Thread
+                    </Dropdown.Item>
                   </Dropdown.Menu>
                 </Dropdown>
               </div>
@@ -128,44 +230,70 @@ export default function Conversations() {
 
             {/* Messages area */}
             <div className="chat-messages">
-              {/* Sample messages */}
-              <div className="text-center text-muted my-3" style={{ fontSize: '.75rem' }}>
-                <Badge bg="light" text="dark" style={{ fontSize: '.7rem' }}>Today</Badge>
-              </div>
-              <div className="chat-bubble inbound">
-                <div>{active.lastMessage}</div>
-                <div className="text-muted mt-1" style={{ fontSize: '.65rem' }}>10:24 AM</div>
-              </div>
-              <div className="chat-bubble outbound">
-                <div>Thank you for reaching out! I'm here to help you with that. Let me look into it right away.</div>
-                <div className="text-muted mt-1" style={{ fontSize: '.65rem' }}>10:25 AM &middot; <i className="bi bi-check2-all text-primary" /></div>
-              </div>
-              <div className="chat-bubble inbound">
-                <div>Great, I appreciate the quick response!</div>
-                <div className="text-muted mt-1" style={{ fontSize: '.65rem' }}>10:26 AM</div>
-              </div>
-              <div className="chat-bubble outbound">
-                <div>I've found the information you need. Here are the details for your request. Please let me know if you have any other questions!</div>
-                <div className="text-muted mt-1" style={{ fontSize: '.65rem' }}>10:27 AM &middot; <i className="bi bi-check2-all text-primary" /></div>
-              </div>
+              {isMessagesLoading ? (
+                <div className="d-flex justify-content-center py-5">
+                  <Spinner animation="border" variant="success" size="sm" />
+                </div>
+              ) : messagesList.length === 0 ? (
+                <div className="text-center text-muted py-5 fs-sm">No messages in this conversation.</div>
+              ) : (
+                messagesList
+                  .slice()
+                  .reverse()
+                  .map((msg: any) => (
+                    <div key={msg.id} className={`chat-bubble ${msg.direction}`}>
+                      <div>{msg.body}</div>
+                      <div className="text-muted mt-1" style={{ fontSize: '.65rem' }}>
+                        {msg.created_at ? new Date(msg.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''}
+                        {msg.direction === 'outbound' && (
+                          <span>
+                            {' '}
+                            &middot;{' '}
+                            <i
+                              className={`bi ${msg.status === 'read' ? 'bi-check2-all text-primary' : 'bi-check2'}`}
+                              title={msg.status}
+                            />
+                          </span>
+                        )}
+                        {msg.ai_generated && (
+                          <span className="ms-1" title="AI Generated">
+                            <i className="bi bi-robot text-success" />
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))
+              )}
             </div>
 
             {/* Input area */}
             <div className="chat-input-area">
-              <button className="btn btn-sm btn-light" style={{ borderRadius: '50%', width: 36, height: 36 }}>
+              <button className="btn btn-sm btn-light" style={{ borderRadius: '50%', width: 36, height: 36 }} aria-label="Attach file">
                 <i className="bi bi-paperclip" />
               </button>
               <Form.Control
                 placeholder="Type a message..."
+                value={messageText}
+                onChange={(e) => setMessageText(e.target.value)}
                 style={{ borderRadius: '1.5rem', fontSize: '.875rem' }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') {
-                    /* send message */
+                    handleSendMessage()
                   }
                 }}
               />
-              <button className="btn btn-sm text-white" style={{ background: 'linear-gradient(135deg, #25d366, #128c7e)', borderRadius: '50%', width: 36, height: 36 }}>
-                <i className="bi bi-send-fill" />
+              <button
+                className="btn btn-sm text-white"
+                onClick={handleSendMessage}
+                disabled={sendMessageMutation.isPending}
+                aria-label="Send message"
+                style={{ background: 'linear-gradient(135deg, #25d366, #128c7e)', borderRadius: '50%', width: 36, height: 36 }}
+              >
+                {sendMessageMutation.isPending ? (
+                  <Spinner animation="border" size="sm" variant="light" />
+                ) : (
+                  <i className="bi bi-send-fill" />
+                )}
               </button>
             </div>
           </>
@@ -182,3 +310,4 @@ export default function Conversations() {
     </div>
   )
 }
+

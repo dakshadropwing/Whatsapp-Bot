@@ -120,3 +120,21 @@ def toggle_agent(agent_id: str):
         return jsonify({"error": "Failed to toggle agent"}), 400
 
     return jsonify({"id": str(updated_agent.id), "toggled": True, "is_active": updated_agent.is_active}), 200
+
+
+@agents_bp.delete("/<agent_id>")
+@jwt_required()
+def delete_agent(agent_id: str):
+    org_id = g.org_id
+    if not org_id:
+        return jsonify({"error": "Tenant context missing"}), 401
+
+    agent = AgentService.get_agent(agent_id)
+    if not agent or str(agent.organization_id) != org_id:
+        return jsonify({"error": "Agent not found"}), 404
+
+    success = AgentService.delete_agent(agent_id)
+    if not success:
+        return jsonify({"error": "Failed to delete agent"}), 400
+
+    return jsonify({"id": agent_id, "deleted": True}), 200

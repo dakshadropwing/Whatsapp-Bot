@@ -11,7 +11,7 @@ import sqlalchemy as sa
 from sqlalchemy.dialects import postgresql
 
 # Alembic identifiers
-revision = "0003_add_tickets_and_endpoint_configs"
+revision = "0003_add_tickets_endpoints"
 down_revision = "0002_add_ivfflat_index"
 branch_labels = None
 depends_on = None
@@ -89,7 +89,7 @@ def upgrade() -> None:
         sa.Column("description", sa.Text, nullable=True),
         sa.Column("url", sa.String(2048), nullable=False),
         sa.Column("method", sa.String(10), nullable=False, server_default="POST"),
-        sa.Column("headers", postgresql.JSONB, nullable=False, server_default="'{}'"),
+        sa.Column("headers", postgresql.JSONB, nullable=False, server_default=sa.text("'{}'")),
         sa.Column("is_active", sa.Boolean, nullable=False, server_default="true"),
         sa.Column(
             "created_at",

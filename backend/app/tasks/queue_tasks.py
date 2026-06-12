@@ -29,11 +29,14 @@ def process_inbound_message_task(self, normalized_message: dict) -> None:
         normalized_message: Flat dict produced by ``WhatsAppService.normalize_inbound``.
     """
     from app.ai.orchestrator.router import AgentRouter
+    from app.factory import create_app
 
+    app = create_app()
     router = AgentRouter()
     try:
-        # Execute the async router wrapper in Celery's sync loop context
-        asyncio.run(router.route(normalized_message))
+        # Execute the async router wrapper in Celery's sync loop context inside Flask app context
+        with app.app_context():
+            asyncio.run(router.route(normalized_message))
     except Exception as exc:
         logger.exception(
             "Failed to process inbound message from %s",

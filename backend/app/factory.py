@@ -36,6 +36,7 @@ def create_app(settings: Optional[Settings] = None) -> Flask:
 
     app = Flask(__name__)
     app.config.from_object(settings)
+    app.url_map.strict_slashes = False
 
     # ── Logging ──────────────────────────────────────────────
     configure_logging(settings)

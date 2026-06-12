@@ -5,6 +5,7 @@ export interface User {
   username: string
   full_name: string
   role: string
+  role_id?: string | null
   organization_id: string
   avatar_url?: string
   last_login_at?: string
@@ -92,10 +93,11 @@ export type AgentType = 'lead' | 'support' | 'sales' | 'project' | 'hr' | 'knowl
 export interface Agent {
   id: string
   name: string
-  type: AgentType
-  description: string
+  role_type: AgentType
+  system_prompt: string
+  provider: string
+  model_name: string
   is_active: boolean
-  config: Record<string, unknown>
   organization_id: string
   created_at: string
   updated_at: string
@@ -224,3 +226,18 @@ export interface AuditLog {
   ip_address: string | null
   created_at: string
 }
+
+/* ── Employee Types ────────────────────────────────── */
+export interface Employee {
+  id: string
+  organization_id: string
+  name: string
+  email: string
+  phone: string | null
+  department: string | null
+  role: string
+  status: string
+  created_at?: string
+  updated_at?: string
+}
+

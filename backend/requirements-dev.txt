@@ -23,3 +23,5 @@ ipython>=8.22.0
 ipdb>=0.13.13
 detect-secrets>=1.4.0
 pre-commit>=3.6.2
+flower>=2.0.1
+

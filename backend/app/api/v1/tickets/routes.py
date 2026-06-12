@@ -216,3 +216,20 @@ def update_ticket_status(ticket_id: str):
         return jsonify({"error": "Failed to update ticket status"}), 400
 
     return jsonify({"id": str(updated_ticket.id), "status": updated_ticket.status.value, "updated": True}), 200
+
+
+@tickets_bp.delete("/<ticket_id>")
+@jwt_required()
+def delete_ticket(ticket_id: str):
+    org_id = g.org_id
+    if not org_id:
+        return jsonify({"error": "Tenant context missing"}), 401
+
+    ticket = db.session.get(Ticket, uuid.UUID(ticket_id))
+    if not ticket or str(ticket.organization_id) != org_id:
+        return jsonify({"error": "Ticket not found"}), 404
+
+    db.session.delete(ticket)
+    db.session.commit()
+    return jsonify({"deleted": True}), 200
+

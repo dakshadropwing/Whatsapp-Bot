@@ -118,6 +118,32 @@ class BaseAgent(ABC):
             assistant_message=response.content,
         )
 
+        # Save outbound AI response to PostgreSQL
+        try:
+            from app.extensions import db
+            from sqlalchemy import select
+            from app.models.conversation import Conversation
+            from app.services.message_service import MessageService
+
+            conv = db.session.execute(
+                select(Conversation)
+                .where(Conversation.contact_phone == conversation_id)
+                .order_by(Conversation.created_at.desc())
+                .limit(1)
+            ).scalar_one_or_none()
+
+            if conv:
+                MessageService.create_message(
+                    org_id=str(conv.organization_id),
+                    conversation_id=str(conv.id),
+                    direction="outbound",
+                    body=response.content,
+                    message_type="text",
+                    ai_generated=True
+                )
+        except Exception as db_exc:
+            logger.exception("BaseAgent: Failed to persist outbound message to database", exc_info=db_exc)
+
         return response.content
 
     # ── Tool execution ────────────────────────────────────────────────────
