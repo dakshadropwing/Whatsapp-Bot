@@ -44,31 +44,7 @@ class AgentRouter:
         from app.services.conversation_service import ConversationService
         from app.services.message_service import MessageService
 
-<<<<<<< HEAD
-        # Resolve tenant organization ID first by querying WhatsAppAccount with receiver's phone_number_id
         org_id = None
-        if phone_number_id:
-            from app.models.whatsapp_account import WhatsAppAccount
-            try:
-                acc = db.session.execute(
-                    select(WhatsAppAccount).where(WhatsAppAccount.phone_number_id == phone_number_id)
-                ).scalar_one_or_none()
-                if acc:
-                    org_id = acc.organization_id
-            except Exception as exc:
-                logger.warning("Router: failed to resolve tenant org_id from phone_number_id", exc_info=exc)
-
-        try:
-            query = select(Conversation).where(Conversation.contact_phone == from_number)
-            if org_id:
-                # Cast uuid.UUID if it's a string, or use directly if already a UUID
-                query = query.where(Conversation.organization_id == org_id)
-
-            conv = db.session.execute(
-                query.order_by(Conversation.created_at.desc())
-                .limit(1)
-            ).scalar_one_or_none()
-=======
         conv = None
         try:
             phone_number_id = normalized_message.get("phone_number_id")
@@ -81,11 +57,11 @@ class AgentRouter:
                 wa_account = db.session.execute(
                     select(WhatsAppAccount).where(WhatsAppAccount.is_active == True).limit(1)
                 ).scalar_one_or_none()
->>>>>>> 78514c9 (Describe what you implemented)
 
             if wa_account:
+                org_id = str(wa_account.organization_id)
                 conv, created = ConversationService.get_or_create(
-                    org_id=str(wa_account.organization_id),
+                    org_id=org_id,
                     phone=from_number,
                     wa_id=normalized_message.get("wa_id") or from_number,
                     wa_account_id=str(wa_account.id),
@@ -93,7 +69,7 @@ class AgentRouter:
                 )
 
                 MessageService.create_message(
-                    org_id=str(wa_account.organization_id),
+                    org_id=org_id,
                     conversation_id=str(conv.id),
                     direction="inbound",
                     body=body,
