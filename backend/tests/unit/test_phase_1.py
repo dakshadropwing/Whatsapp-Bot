@@ -46,3 +46,24 @@ def test_encryption_loops():
 
     decrypted = EncryptionService.decrypt(ciphertext)
     assert decrypted == plaintext
+
+
+def test_encrypted_text_decorator():
+    """Verify EncryptedText TypeDecorator binds and processes parameters correctly."""
+    from app.models.whatsapp_account import EncryptedText
+    decorator = EncryptedText()
+    
+    plaintext = "access-token-123"
+    
+    # Bind (encrypt)
+    encrypted = decorator.process_bind_param(plaintext, None)
+    assert encrypted != plaintext
+    assert encrypted is not None
+    
+    # Result (decrypt)
+    decrypted = decorator.process_result_value(encrypted, None)
+    assert decrypted == plaintext
+    
+    # Test None handling
+    assert decorator.process_bind_param(None, None) is None
+    assert decorator.process_result_value(None, None) is None

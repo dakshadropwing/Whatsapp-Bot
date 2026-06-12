@@ -105,3 +105,25 @@ def create_ticket_task(
         conversation_id=conversation_id,
     )
     return str(ticket.id)
+
+
+@celery_app.task(
+    name="app.tasks.queue_tasks.process_inbound_webhook_task",
+    queue="default",
+    bind=True,
+    max_retries=3,
+    default_retry_delay=5,
+)
+def process_inbound_webhook_task(self, payload: dict) -> None:
+    """
+    Process raw incoming WhatsApp webhook payload in background.
+    """
+    import asyncio
+    from app.integrations.whatsapp.webhook_handler import WebhookHandler
+
+    try:
+        handler = WebhookHandler()
+        asyncio.run(handler.dispatch(payload))
+    except Exception as exc:
+        logger.exception("Failed to process inbound webhook payload background task")
+        raise self.retry(exc=exc)

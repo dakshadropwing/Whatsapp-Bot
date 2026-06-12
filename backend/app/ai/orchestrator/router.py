@@ -34,17 +34,34 @@ class AgentRouter:
     async def route(self, normalized_message: dict[str, Any]) -> None:
         from_number = normalized_message["from"]
         body = normalized_message["body"]
+        phone_number_id = normalized_message.get("phone_number_id")
 
         # Step 0: Check database conversation status for active human handling
         from app.extensions import db
         from sqlalchemy import select
         from app.models.conversation import Conversation, ConversationStatus
 
+        # Resolve tenant organization ID first by querying WhatsAppAccount with receiver's phone_number_id
+        org_id = None
+        if phone_number_id:
+            from app.models.whatsapp_account import WhatsAppAccount
+            try:
+                acc = db.session.execute(
+                    select(WhatsAppAccount).where(WhatsAppAccount.phone_number_id == phone_number_id)
+                ).scalar_one_or_none()
+                if acc:
+                    org_id = acc.organization_id
+            except Exception as exc:
+                logger.warning("Router: failed to resolve tenant org_id from phone_number_id", exc_info=exc)
+
         try:
+            query = select(Conversation).where(Conversation.contact_phone == from_number)
+            if org_id:
+                # Cast uuid.UUID if it's a string, or use directly if already a UUID
+                query = query.where(Conversation.organization_id == org_id)
+
             conv = db.session.execute(
-                select(Conversation)
-                .where(Conversation.contact_phone == from_number)
-                .order_by(Conversation.created_at.desc())
+                query.order_by(Conversation.created_at.desc())
                 .limit(1)
             ).scalar_one_or_none()
 
@@ -59,15 +76,15 @@ class AgentRouter:
             logger.warning("Router: database check failed, routing normally", exc_info=exc)
 
         # Step 1: Look up existing session
-        agent_type = await self._get_active_agent(from_number)
+        agent_type = await self._get_active_agent(from_number, org_id)
 
         # Step 2: Classify if no active agent
         if not agent_type:
             agent_type = await self._classify(body)
-            logger.info(f"Router: classified '{from_number}' → {agent_type}")
+            logger.info(f"Router: classified '{from_number}' (org={org_id}) → {agent_type}")
 
         # Step 3: Extend or save the active session in cache
-        await self._set_active_agent(from_number, agent_type)
+        await self._set_active_agent(from_number, agent_type, org_id)
 
         # Step 4: Invoke agent
         agent = self._load_agent(agent_type)
@@ -76,26 +93,28 @@ class AgentRouter:
         else:
             logger.warning(f"Router: no agent found for type '{agent_type}'")
 
-    async def _get_active_agent(self, phone: str) -> str | None:
+    async def _get_active_agent(self, phone: str, org_id: Any | None = None) -> str | None:
         """Check Redis for an ongoing agent session for this phone number."""
         import redis.asyncio as aioredis
         from app.core.config.settings import get_settings
         settings = get_settings()
         try:
             r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
-            return await r.get(f"session:agent:{phone}")
+            key = f"session:agent:{org_id}:{phone}" if org_id else f"session:agent:{phone}"
+            return await r.get(key)
         except Exception as exc:
             logger.warning(f"Failed to fetch active agent session for phone {phone} from Redis", exc_info=exc)
             return None
 
-    async def _set_active_agent(self, phone: str, agent_type: str) -> None:
+    async def _set_active_agent(self, phone: str, agent_type: str, org_id: Any | None = None) -> None:
         """Save the active agent to Redis (expires after 30 minutes)."""
         import redis.asyncio as aioredis
         from app.core.config.settings import get_settings
         settings = get_settings()
         try:
             r = aioredis.from_url(settings.REDIS_URL, decode_responses=True)
-            await r.setex(f"session:agent:{phone}", 1800, agent_type)
+            key = f"session:agent:{org_id}:{phone}" if org_id else f"session:agent:{phone}"
+            await r.setex(key, 1800, agent_type)
         except Exception as exc:
             logger.warning(f"Failed to persist active agent session for phone {phone} to Redis", exc_info=exc)
 

@@ -131,3 +131,50 @@ async def test_router_routing_flow(mock_provider, mock_redis):
             # 4. Support Agent got loaded and handled the message
             mock_load.assert_called_once_with("support")
             mock_support_agent.handle.assert_called_once_with(message)
+
+
+@pytest.mark.asyncio
+async def test_router_tenant_scoping(mock_provider, mock_redis):
+    """Verify that AgentRouter resolves tenant and filters conversation queries by organization_id."""
+    import uuid
+    router = AgentRouter()
+    
+    mock_acc = MagicMock()
+    mock_org_id = uuid.uuid4()
+    mock_acc.organization_id = mock_org_id
+    
+    mock_execute = MagicMock()
+    # First call returns WhatsAppAccount, second call returns Conversation
+    mock_execute.return_value.scalar_one_or_none.side_effect = [mock_acc, None]
+    
+    message = {
+        "from": "+1234567890",
+        "body": "Hi",
+        "type": "text",
+        "phone_number_id": "phone-id-555"
+    }
+    
+    with patch("redis.asyncio.from_url", return_value=mock_redis), \
+         patch("app.ai.providers.provider_factory.ProviderFactory.get_provider", return_value=mock_provider), \
+         patch("app.extensions.db.session.execute", mock_execute):
+         
+        mock_provider.complete.return_value = CompletionResponse(
+            content="support",
+            model="test-model",
+            provider="test-provider",
+            input_tokens=0,
+            output_tokens=0,
+            total_tokens=0,
+        )
+        
+        mock_agent = MagicMock()
+        mock_agent.handle = AsyncMock()
+        
+        with patch.object(router, "_load_agent", return_value=mock_agent):
+            await router.route(message)
+            
+            # Verify Redis key was constructed with org_id
+            mock_redis.setex.assert_called_once_with(f"session:agent:{mock_org_id}:+1234567890", 1800, "support")
+            
+            # Verify that two queries were executed (WhatsAppAccount lookup and Conversation lookup)
+            assert mock_execute.call_count == 2
