@@ -106,13 +106,19 @@ async def test_resolve_conversation(mock_redis, mock_db_session):
 @pytest.mark.asyncio
 async def test_router_bypasses_human_handling(mock_redis, mock_db_session):
     """Test that AgentRouter ignores message routing if conversation status is human_handling."""
+    import uuid
     router = AgentRouter()
 
-    # Case A: Conversation is in HUMAN_HANDLING status
+    mock_acc = MagicMock()
+    mock_acc.organization_id = uuid.uuid4()
+    mock_acc.id = uuid.uuid4()
+
     mock_conv = MagicMock()
     mock_conv.status = ConversationStatus.HUMAN_HANDLING
+    mock_conv.id = uuid.uuid4()
+
     mock_result = MagicMock()
-    mock_result.scalar_one_or_none.return_value = mock_conv
+    mock_result.scalar_one_or_none.return_value = mock_acc
     mock_db_session.execute.return_value = mock_result
 
     message = {
@@ -122,7 +128,9 @@ async def test_router_bypasses_human_handling(mock_redis, mock_db_session):
     }
 
     with patch("redis.asyncio.from_url", return_value=mock_redis), \
-         patch("app.extensions.db.session", mock_db_session):
+         patch("app.extensions.db.session", mock_db_session), \
+         patch("app.services.conversation_service.ConversationService.get_or_create", return_value=(mock_conv, False)), \
+         patch("app.services.message_service.MessageService.create_message"):
         
         # We mock get_active_agent and _classify to make sure they are NOT called
         with patch.object(router, "_get_active_agent") as mock_get_active, \
@@ -138,13 +146,19 @@ async def test_router_bypasses_human_handling(mock_redis, mock_db_session):
 @pytest.mark.asyncio
 async def test_router_bypasses_escalated(mock_redis, mock_db_session):
     """Test that AgentRouter ignores message routing if conversation status is escalated."""
+    import uuid
     router = AgentRouter()
 
-    # Case B: Conversation is in ESCALATED status
+    mock_acc = MagicMock()
+    mock_acc.organization_id = uuid.uuid4()
+    mock_acc.id = uuid.uuid4()
+
     mock_conv = MagicMock()
     mock_conv.status = ConversationStatus.ESCALATED
+    mock_conv.id = uuid.uuid4()
+
     mock_result = MagicMock()
-    mock_result.scalar_one_or_none.return_value = mock_conv
+    mock_result.scalar_one_or_none.return_value = mock_acc
     mock_db_session.execute.return_value = mock_result
 
     message = {
@@ -154,7 +168,9 @@ async def test_router_bypasses_escalated(mock_redis, mock_db_session):
     }
 
     with patch("redis.asyncio.from_url", return_value=mock_redis), \
-         patch("app.extensions.db.session", mock_db_session):
+         patch("app.extensions.db.session", mock_db_session), \
+         patch("app.services.conversation_service.ConversationService.get_or_create", return_value=(mock_conv, False)), \
+         patch("app.services.message_service.MessageService.create_message"):
         
         with patch.object(router, "_get_active_agent") as mock_get_active, \
              patch.object(router, "_classify") as mock_classify:
