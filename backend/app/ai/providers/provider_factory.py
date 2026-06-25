@@ -13,7 +13,6 @@ from app.core.config.settings import get_settings
 class ProviderType(str, Enum):
     GEMINI = "gemini"
     OLLAMA = "ollama"
-    OPENAI = "openai"
 
 
 class ProviderFactory:
@@ -56,11 +55,6 @@ class ProviderFactory:
                 model=settings.OLLAMA_MODEL,
                 embed_model=settings.OLLAMA_EMBED_MODEL,
             )
-        elif ptype == ProviderType.OPENAI:
-            from app.ai.providers.openai_provider import OpenAIProvider
-            return OpenAIProvider(
-                api_key=settings.OPENAI_API_KEY,
-            )
         else:
             raise ValueError(f"Unknown AI provider: {ptype}")
 
@@ -75,7 +69,5 @@ class ProviderFactory:
         available = []
         if settings.GOOGLE_AI_API_KEY:
             available.append(ProviderType.GEMINI)
-        if settings.OPENAI_API_KEY:
-            available.append(ProviderType.OPENAI)
         available.append(ProviderType.OLLAMA)  # Always available if running locally
         return available

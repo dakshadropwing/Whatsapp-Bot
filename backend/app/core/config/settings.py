@@ -87,7 +87,6 @@ class Settings(BaseSettings):
 
     # ── AI Providers ──────────────────────────────────────────
     GOOGLE_AI_API_KEY: Optional[str] = None
-    OPENAI_API_KEY: Optional[str] = None
     GOOGLE_AI_MODEL: str = Field(default="gemini-2.5-flash")
     OLLAMA_BASE_URL: str = Field(default="http://localhost:11434")
     OLLAMA_MODEL: str = Field(default="llama3.2:1b")
