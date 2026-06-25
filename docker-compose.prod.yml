@@ -1,0 +1,132 @@
+# =============================================================
+# Docker Compose — Production
+# Hardened, resource-limited, no dev tools
+# =============================================================
+
+version: "3.9"
+
+x-backend-common: &backend-common
+  image: whatsapp-platform-backend:${IMAGE_TAG:-latest}
+  restart: always
+  env_file: .env
+  depends_on:
+    - postgres
+    - redis
+  networks:
+    - platform_net
+  logging:
+    driver: "json-file"
+    options:
+      max-size: "50m"
+      max-file: "5"
+
+services:
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    restart: always
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-whatsapp_platform}
+      POSTGRES_USER: ${POSTGRES_USER:-whatsapp_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - platform_net
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+
+  redis:
+    image: redis:7-alpine
+    restart: always
+    command: >
+      redis-server
+      --requirepass ${REDIS_PASSWORD}
+      --maxmemory 1gb
+      --maxmemory-policy allkeys-lru
+      --save 900 1
+      --save 300 10
+    volumes:
+      - redis_data:/data
+    networks:
+      - platform_net
+    deploy:
+      resources:
+        limits:
+          memory: 1.5G
+
+  backend:
+    <<: *backend-common
+    ports:
+      - "127.0.0.1:5000:5000"
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          memory: 1G
+
+  worker:
+    <<: *backend-common
+    command: >
+      celery -A app.tasks.celery_app:celery_app worker
+      --loglevel=warning
+      -Q default,ai,workflows,critical
+      --concurrency=8
+      --max-tasks-per-child=100
+    deploy:
+      replicas: 2
+      resources:
+        limits:
+          memory: 2G
+
+  beat:
+    <<: *backend-common
+    command: >
+      celery -A app.tasks.celery_app:celery_app beat
+      --loglevel=warning
+    deploy:
+      replicas: 1
+
+  frontend:
+    image: whatsapp-platform-frontend:${IMAGE_TAG:-latest}
+    restart: always
+    networks:
+      - platform_net
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+  nginx:
+    image: nginx:alpine
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infra/nginx/ssl.conf:/etc/nginx/conf.d/ssl.conf:ro
+      - nginx_certs:/etc/ssl/certs
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - platform_net
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+
+volumes:
+  postgres_data:
+  redis_data:
+  nginx_certs:
+
+networks:
+  platform_net:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

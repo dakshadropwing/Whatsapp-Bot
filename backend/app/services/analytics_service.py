@@ -118,41 +118,11 @@ class AnalyticsService:
             .group_by(Conversation.status)
         ).all()
 
-        # Agent usage (join with AIAgent to get name)
-        from app.models.ai_agent import AIAgent
-        agent_usage_query = db.session.execute(
-            select(AIAgent.name, func.count(Conversation.id).label("handled"), func.count(Conversation.id).filter(Conversation.status == 'resolved').label("resolved"))
-            .outerjoin(Conversation, (Conversation.assigned_agent_id == AIAgent.id) & (Conversation.organization_id == oid))
-            .where(AIAgent.organization_id == oid)
-            .group_by(AIAgent.id)
-        ).all()
-        agent_usage = [{"agent": r.name, "handled": r.handled, "resolved": r.resolved} for r in agent_usage_query]
-
-        # Recent live events (use recent messages and tickets)
-        recent_msgs = db.session.execute(
-            select(Message.created_at, Message.content, Message.direction)
-            .where(Message.organization_id == oid)
-            .order_by(Message.created_at.desc())
-            .limit(5)
-        ).all()
-        
-        events = []
-        for i, msg in enumerate(recent_msgs):
-            events.append({
-                "id": str(i),
-                "type": "message",
-                "title": "Inbound Message" if msg.direction.value == "inbound" else "Outbound Message",
-                "description": msg.content[:50] + ("..." if len(msg.content) > 50 else ""),
-                "severity": "info",
-                "timeAgo": msg.created_at.isoformat()
-            })
-
         return {
             "messages_by_day": [{"label": str(r.label), "value": r.value} for r in msg_by_day],
             "conversations_by_status": [{"label": r.label.value if r.label else "unknown", "value": r.value} for r in conv_by_status],
-            "agent_usage": agent_usage,
+            "agent_usage": [],
             "response_times": [],
-            "recent_events": events,
         }
 
     @staticmethod
