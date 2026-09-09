@@ -4,7 +4,6 @@ __pycache__/
 *.pyo
 *.pyd
 .Python
-.env
 .venv
 venv/
 env/
@@ -30,7 +29,6 @@ out/
 
 # Secrets & Env
 *.env
-.env.*
 !*.env.example
 secrets/
 *.pem
@@ -42,7 +40,6 @@ secrets/
 *.override.yml
 
 # IDE
-.vscode/
 .idea/
 *.swp
 *.swo
@@ -67,3 +64,4 @@ logs/
 # Misc
 *.bak
 *.tmp
+config.bat
